@@ -1,1 +1,281 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIVI System | Saigon Command</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Inter:wght@300;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { 
+            --accent-color: #f39c12; --cyber-cyan: #00a8ff; 
+            --bg-glass: rgba(10, 20, 30, 0.4); --border-glass: rgba(0, 168, 255, 0.3);
+            --panel-bg: rgba(5, 15, 25, 0.85);
+        }
+        
+        /* BỎ overflow: hidden ĐỂ CHO PHÉP CUỘN TRANG */
+        body { 
+            margin: 0; padding: 0; font-family: 'Inter', sans-serif; color: #ffffff; 
+            background: linear-gradient(to bottom, rgba(5,10,20,0.5), rgba(5,10,20,0.95)), 
+                        url('https://images.unsplash.com/photo-1583417319070-4a69db38a482?q=80&w=1920&auto=format&fit=crop') no-repeat center center fixed; 
+            background-size: cover; 
+        }
+        
+        /* KHU VỰC DASHBOARD CHÍNH CỐ ĐỊNH CHIỀU CAO 1 MÀN HÌNH */
+        .main-dashboard { min-height: 100vh; display: flex; flex-direction: column; }
+
+        .hero { padding: 40px 50px 10px 50px; display: flex; justify-content: space-between; align-items: flex-end; z-index: 10; }
+        .hero-left { display: flex; align-items: center; gap: 40px; }
+        .hero-title { margin: 0; font-family: 'Montserrat', sans-serif; font-size: 3.5rem; line-height: 0.9; text-transform: uppercase; text-shadow: 0 0 20px rgba(243, 156, 18, 0.5); }
+        .hero-subtitle { font-size: 0.9rem; color: var(--cyber-cyan); margin-top: 10px; font-weight: 300; letter-spacing: 2px; }
+        .accent-line { width: 60px; height: 3px; background: var(--accent-color); margin-top: 15px; box-shadow: 0 0 10px var(--accent-color); }
+        
+        .device-3d-container { perspective: 1000px; width: 160px; height: 130px; }
+        .device-img { width: 100%; height: 100%; object-fit: contain; transition: transform 0.1s; filter: drop-shadow(0 15px 15px rgba(0,0,0,0.6)); }
+
+        .status-container { font-size: 0.8rem; text-transform: uppercase; color: var(--cyber-cyan); text-align: right; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 10px currentColor; } .online { color: #00e676; } .offline { color: #ff1744; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr 1.5fr; gap: 25px; padding: 20px 50px 50px 50px; z-index: 10; flex-grow: 1;}
+        .card { background: var(--bg-glass); backdrop-filter: blur(8px); border: 1px solid var(--border-glass); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5); height: 280px; }
+        .card-header { font-family: 'Montserrat', sans-serif; font-size: 0.8rem; letter-spacing: 2px; color: var(--cyber-cyan); margin-bottom: 15px; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px; }
+        
+        #camera-feed { width: 100%; height: 100%; max-height: 190px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-glass); }
+        #ai-output { flex-grow: 1; overflow-y: auto; font-size: 1rem; line-height: 1.6; color: #fdfdfd; font-weight: 300; padding-right: 15px; } #ai-output::-webkit-scrollbar { width: 4px; } #ai-output::-webkit-scrollbar-thumb { background: var(--cyber-cyan); border-radius: 4px; }
+        
+        .chart-container { flex-grow: 1; position: relative; width: 100%; height: 100%; }
+        .stat-label { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--cyber-cyan); margin-bottom: 6px; }
+
+        /* ========================================================= */
+        /* KHU VỰC TÀI LIỆU KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE) */
+        /* ========================================================= */
+        .architecture-section {
+            padding: 50px; max-width: 1400px; margin: 0 auto;
+        }
+        .section-title {
+            text-align: center; font-family: 'Montserrat', sans-serif; font-size: 2.5rem; color: var(--accent-color); 
+            text-shadow: 0 0 15px rgba(243, 156, 18, 0.4); margin-bottom: 50px; text-transform: uppercase;
+        }
+        .arch-card {
+            background: rgba(10, 20, 30, 0.7); backdrop-filter: blur(10px); border: 1px solid var(--border-glass);
+            border-radius: 16px; padding: 40px; margin-bottom: 40px;
+            display: flex; gap: 40px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            /* Thuộc tính chuẩn bị cho Animation Reveal */
+            opacity: 0; transform: translateY(80px); transition: all 0.8s ease-out;
+        }
+        /* Class sẽ được JS thêm vào khi cuộn tới */
+        .arch-card.visible { opacity: 1; transform: translateY(0); }
+        
+        /* Đảo ngược layout đan xen cho đẹp */
+        .arch-card:nth-child(even) { flex-direction: row-reverse; }
+        
+        .arch-content { flex: 1; }
+        .arch-content h3 { font-family: 'Montserrat', sans-serif; color: var(--cyber-cyan); font-size: 1.5rem; margin-top: 0; }
+        .arch-content p { line-height: 1.8; color: #e2e8f0; font-size: 1.05rem; text-align: justify; }
+        .arch-image { flex: 1.2; text-align: center; }
+        .arch-image img { width: 100%; border-radius: 12px; border: 2px solid rgba(243, 156, 18, 0.5); box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+
+        /* Các Widget Góc (ẩn gọn) */
+        .widget-panel { position: fixed; bottom: 90px; width: 350px; background: var(--panel-bg); backdrop-filter: blur(15px); border: 1px solid var(--cyber-cyan); border-radius: 12px; display: none; flex-direction: column; z-index: 100; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
+        .widget-header { background: linear-gradient(90deg, rgba(0,168,255,0.2), transparent); padding: 12px 15px; font-weight: 700; font-size: 0.95rem; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-glass); }
+        .close-btn { color: var(--cyber-cyan); cursor: pointer; font-size: 1.3rem; } .close-btn:hover { color: #fff; }
+        .float-icon { position: fixed; bottom: 30px; width: 55px; height: 55px; background: var(--panel-bg); border: 2px solid var(--cyber-cyan); border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 5px 20px rgba(0,168,255,0.4); z-index: 99; color: var(--accent-color); transition: 0.3s; font-size: 1.2rem;}
+        .float-icon:hover { transform: translateY(-5px) scale(1.05); } 
+        #toggle-chat { right: 30px; } #toggle-config { right: 100px; } #toggle-storage { left: 30px; border-color: var(--accent-color); color: var(--cyber-cyan);}
+
+        /* Cấu trúc widget gọn gàng (Rút gọn CSS cho Widget để tập trung vào Architecture) */
+        #storage-container { left: 30px; height: 500px; border-color: var(--accent-color); width: 380px;} #chat-container { right: 30px; height: 450px; } #config-container { right: 100px; height: auto; padding-bottom: 20px;}
+        .chat-logs, .storage-body { padding: 15px; flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;}
+        .upload-box { border: 2px dashed var(--accent-color); padding: 15px; text-align: center; border-radius: 8px; background: rgba(0,0,0,0.3); } .upload-input { display: none; } .upload-btn { background: var(--accent-color); color: #fff; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 5px;} .text-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--accent-color); color: #fff; padding: 10px; border-radius: 5px; box-sizing: border-box; font-family: 'Inter', sans-serif;}
+        #preview-box { display: none; margin-top: 15px; border: 1px solid rgba(243, 156, 18, 0.5); padding: 15px; border-radius: 8px; background: rgba(0,0,0,0.5); } #preview-img { max-width: 100%; border-radius: 5px; display: none; margin-bottom: 10px; } #preview-text { font-size: 0.9rem; color: #fff; white-space: pre-wrap; display: none; border-left: 3px solid var(--cyber-cyan); padding-left: 10px;}
+        .message { padding: 8px 12px; border-radius: 12px; max-width: 85%; } .message-user { background: rgba(255, 255, 255, 0.1); align-self: flex-end; } .message-ai { background: rgba(0, 168, 255, 0.15); align-self: flex-start; color: var(--cyber-cyan); border: 1px solid rgba(0, 168, 255, 0.3); } .chat-input-area { background: rgba(0,0,0,0.4); padding: 12px; display: flex; gap: 8px; border-top: 1px solid var(--border-glass); } #chat-input { flex-grow: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px 12px; color: #fff; outline: none; } #send-chat { background: var(--cyber-cyan); border: none; border-radius: 8px; color: #fff; font-weight: 700; padding: 8px 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="main-dashboard">
+        <div class="hero">
+            <div class="hero-left">
+                <div>
+                    <h1 class="hero-title">AIVI SYSTEM</h1>
+                    <div class="accent-line"></div>
+                    <div class="hero-subtitle">NASCENTIA PROJECT // SAIGON 2026</div>
+                </div>
+                <div class="device-3d-container" id="device-box">
+                    <img src="https://i.postimg.cc/pTgYZdb2/z7468726942171-d96ab70cef83be04f352af7ca2d6751c-removebg-preview.png" alt="AIVI Device" class="device-img" id="device-img">
+                </div>
+            </div>
+            <div class="status-container">
+                <div>SYS.MONITORING // MAIN SERVER</div>
+                <div>STATUS: <span id="ws-status" class="offline"><span class="status-dot"></span>OFFLINE</span></div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">01 // OPTICAL SENSOR</div>
+                <img id="camera-feed" src="/view" alt="Waiting for vision..." onerror="this.src='';">
+            </div>
+            <div class="card">
+                <div class="card-header">02 // NEURAL ENGINE LOGS</div>
+                <div id="ai-output">Hệ thống sẵn sàng...</div>
+            </div>
+            <div class="card">
+                <div class="card-header">03 // SERVER TELEMETRY</div>
+                <div class="stat-label"><span>NETWORK PING:</span> <span id="ping-val">0 ms</span></div>
+                <div class="chart-container"><canvas id="sysChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="architecture-section" id="arch-section">
+        <h2 class="section-title">System Architecture</h2>
+
+        <div class="arch-card">
+            <div class="arch-content">
+                <h3>1) Data Acquisition & Connection</h3>
+                <p><strong>First, Data acquisition:</strong> The ESP32-CAM captures visual data at a 640x480 resolution, which is the optimal balance between image clarity and transmission speed.</p>
+                <p>The system utilizes robust physical wiring to connect the ESP32-S3 processing unit with the MAX98357A amplifier, INMP441 microphone, and power management modules.</p>
+            </div>
+            <div class="arch-image">
+                <img src="LINK_ẢNH_1_CHÈN_VÀO_ĐÂY" alt="Wiring Diagram" onerror="this.src='https://via.placeholder.com/800x400?text=Wiring+Diagram';">
+            </div>
+        </div>
+
+        <div class="arch-card">
+            <div class="arch-content">
+                <h3>2) Cloud Processing Pipeline</h3>
+                <p><strong>Second, The data go to Gemini API:</strong> The raw image data is converted into Base64 encoded string, attached to a JSON Payload and then sent to Web APIs via HTTPS Post request.</p>
+                <p><strong>Third, Cloud Processing:</strong> After Gemini processing, it sends the response back to the server formatted as a JSON object.</p>
+                <p><strong>Fourth, Text-to-Speech:</strong> Once the server extracts the text from the Gemini JSON response, it sends the text to the Google Cloud TTS API, requesting the output formatted as Raw 16-bit PCM.</p>
+            </div>
+            <div class="arch-image">
+                <img src="LINK_ẢNH_2_CHÈN_VÀO_ĐÂY" alt="System Block Diagram" onerror="this.src='https://via.placeholder.com/800x400?text=System+Block+Diagram';">
+            </div>
+        </div>
+
+        <div class="arch-card">
+            <div class="arch-content">
+                <h3>3) Streaming & I2S Playback</h3>
+                <p><strong>Fifth, Chunking and Streaming:</strong> Raw PCM audio is large. Users cannot wait for the entire audio to download, or latency will be terrible. Therefore, the server opens a Websockets connection and breaks the binary PCM into small chunks (e.g., 1024 bytes), emitting them instantly to the ESP32-S3.</p>
+                <p><strong>Sixth, ESP32-S3 Reception:</strong> As the Websocket receives chunks, it writes them into a circular memory buffer (Ring Buffer) to absorb network jitter. The I2S driver then constantly reads this 16-bit PCM data and clocks it out to the MAX98357A DAC for continuous, smooth analog playback.</p>
+            </div>
+            <div class="arch-image">
+                <img src="LINK_ẢNH_3_CHÈN_VÀO_ĐÂY" alt="Hardware Architecture" onerror="this.src='https://via.placeholder.com/800x400?text=Hardware+Architecture';">
+            </div>
+        </div>
+
+        <div class="arch-card">
+            <div class="arch-content">
+                <h3>4) Software Logic Flow</h3>
+                <p>The device follows a strict logical flowchart to ensure stability. It initializes hardware, connects to WiFi and WebSockets, captures images upon trigger, waits for server-side AI processing, and dynamically outputs audio via the I2S speaker, looping back to the standby state efficiently while handling any network exceptions.</p>
+            </div>
+            <div class="arch-image">
+                <img src="LINK_ẢNH_4_CHÈN_VÀO_ĐÂY" alt="Software Flowchart" onerror="this.src='https://via.placeholder.com/800x400?text=Software+Flowchart';">
+            </div>
+        </div>
+    </div>
+
+    <div class="float-icon" id="toggle-storage" title="Kho Lưu Trữ">💾</div>
+    <div class="widget-panel" id="storage-container">
+        <div class="widget-header"><span>💾 DATA VAULT</span><span class="close-btn" id="close-storage-btn">×</span></div>
+        <div class="storage-body" id="storage-scroll-area">
+            <div class="upload-box"><input type="file" id="file-upload" class="upload-input" accept="image/*"><label for="file-upload" class="upload-btn" style="display: block; background: transparent; border: 1px solid var(--accent-color);">CHỌN HÌNH ẢNH MẪU</label><span id="file-name" style="font-size: 0.8rem; display: block; margin-top: 10px; color: var(--accent-color);">Chưa chọn file nào</span></div>
+            <textarea id="text-upload" class="text-input" rows="3" placeholder="Nhập ghi chú..."></textarea>
+            <button class="upload-btn" id="btn-submit-data">LƯU LÊN MÁY CHỦ</button>
+            <div id="preview-box"><p id="preview-title" style="font-size: 0.75rem; color: var(--accent-color); margin-top: 0; margin-bottom: 10px; font-weight: bold;">ĐÃ LƯU THÀNH CÔNG:</p><img id="preview-img" src="" alt="Preview"><div id="preview-text"></div></div>
+        </div>
+    </div>
+
+    <div class="float-icon" id="toggle-config" title="Cấu hình">⚙️</div>
+    <div class="widget-panel" id="config-container">
+        <div class="widget-header"><span>⚙️ SYSTEM SETTINGS</span><span class="close-btn" id="close-config-btn">×</span></div>
+        <div style="padding: 15px;"><p style="font-size: 0.8rem; color: var(--cyber-cyan);">MÔ HÌNH TRÍ TUỆ NHÂN TẠO</p><select id="sel-model" style="width: 100%; padding: 8px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-glass); border-radius: 5px;"><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-pro">Gemini 2.5 Pro</option></select><button class="upload-btn" id="btn-sync" style="background: var(--cyber-cyan);">ĐỒNG BỘ</button></div>
+    </div>
+
+    <div class="float-icon" id="toggle-chat" title="Chatbot">💬</div>
+    <div class="widget-panel" id="chat-container">
+        <div class="widget-header"><span>🧠 AIVI Neural Chat</span><span class="close-btn" id="close-chat-btn">×</span></div>
+        <div class="chat-logs" id="chat-messages"><div class="message message-ai">Trạm Sài Gòn đã sẵn sàng.</div></div>
+        <div class="chat-input-area"><input type="text" id="chat-input" placeholder="Hỏi AIVI..."><button id="send-chat">Gửi</button></div>
+    </div>
+
+    <script>
+        // ======= 1. HIỆU ỨNG SCROLL REVEAL CHO TÀI LIỆU =======
+        // Chờ trang tải xong mới chạy Observer
+        document.addEventListener("DOMContentLoaded", function() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, { threshold: 0.15 }); // Hiện khi cuộn tới 15% khung
+
+            const cards = document.querySelectorAll('.arch-card');
+            cards.forEach((card) => observer.observe(card));
+        });
+
+        // ======= 2. HIỆU ỨNG 3D THIẾT BỊ ẢNH TĨNH =======
+        const deviceBox = document.getElementById('device-box');
+        const deviceImg = document.getElementById('device-img');
+        
+        deviceBox.addEventListener('mousemove', (e) => {
+            const rect = deviceBox.getBoundingClientRect();
+            const xRotate = -((e.clientY - rect.top - rect.height / 2) / rect.height) * 35; 
+            const yRotate = ((e.clientX - rect.left - rect.width / 2) / rect.width) * 35;
+            deviceImg.style.transform = `rotateX(${xRotate}deg) rotateY(${yRotate}deg) scale(1.1)`;
+        });
+        deviceBox.addEventListener('mouseleave', () => { deviceImg.style.transform = 'rotateX(0deg) rotateY(0deg) scale(1)'; });
+
+        // ======= 3. LOGIC UPLOAD VÀ HIỂN THỊ NGAY TRÊN WEB =======
+        const fileInput = document.getElementById('file-upload');
+        fileInput.addEventListener('change', (e) => document.getElementById('file-name').innerText = e.target.files[0] ? e.target.files[0].name : "Chưa chọn file");
+
+        document.getElementById('btn-submit-data').onclick = async () => {
+            const file = fileInput.files[0]; const text = document.getElementById('text-upload').value.trim();
+            if(!file && !text) return alert("Hãy chọn ảnh hoặc nhập chữ trước khi lưu!");
+            const formData = new FormData(); if(file) formData.append('image', file); if(text) formData.append('text', text);
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if(data.success) {
+                    const pb = document.getElementById('preview-box'), pi = document.getElementById('preview-img'), pt = document.getElementById('preview-text');
+                    pb.style.display = 'block';
+                    if (file) { pi.src = URL.createObjectURL(file); pi.style.display = 'block'; } else { pi.style.display = 'none'; }
+                    if (text) { pt.innerText = text; pt.style.display = 'block'; } else { pt.style.display = 'none'; }
+                    fileInput.value = ""; document.getElementById('file-name').innerText = "Chưa chọn file"; document.getElementById('text-upload').value = "";
+                    const scrollArea = document.getElementById('storage-scroll-area');
+                    setTimeout(() => { scrollArea.scrollTop = scrollArea.scrollHeight; }, 100);
+                } else alert("Lỗi: " + data.error);
+            } catch (err) { alert("Lỗi kết nối VPS!"); }
+        };
+
+        // ======= 4. BẢNG XẾP HẠNG & WEBSOCKET =======
+        const ctx = document.getElementById('sysChart').getContext('2d');
+        const sysChart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [ { label: 'CPU', borderColor: '#f39c12', backgroundColor: 'rgba(243, 156, 18, 0.2)', data: [], tension: 0.4, fill: true, pointRadius: 0 }, { label: 'RAM', borderColor: '#00a8ff', backgroundColor: 'rgba(0, 168, 255, 0.2)', data: [], tension: 0.4, fill: true, pointRadius: 0 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { x: { display: false }, y: { min: 0, max: 100, ticks: { color: '#8892b0' } } }, plugins: { legend: { labels: { color: '#fff' } } } }});
+        
+        const ws = new WebSocket('ws://' + window.location.hostname + ':3000/');
+        ws.onopen = () => { document.getElementById('ws-status').className = 'online'; document.getElementById('ws-status').innerHTML = '<span class="status-dot"></span>ONLINE'; ws.send(JSON.stringify({type: "hello", role: "web"})); setInterval(() => { if(ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "ping"})); }, 2000); };
+        let pingStart = performance.now();
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'ai_text') { const out = document.getElementById('ai-output'); out.innerText = data.text; out.scrollTop = out.scrollHeight; }
+            if (data.type === 'new_image') document.getElementById('camera-feed').src = '/view?' + new Date().getTime();
+            if (data.type === 'pong') document.getElementById('ping-val').innerText = Math.round(performance.now() - pingStart) + ' ms';
+            if (data.type === 'chat_reply') { const thinking = document.getElementById('ai-thinking'); if(thinking) thinking.remove(); addMessage(data.text, 'ai'); document.getElementById('chat-input').disabled = false; document.getElementById('send-chat').disabled = false; }
+            pingStart = performance.now();
+        };
+
+        setInterval(() => { fetch('/api/stats').then(res => res.json()).then(data => { const timeStr = new Date().toLocaleTimeString(); sysChart.data.labels.push(timeStr); sysChart.data.datasets[0].data.push(data.cpu); sysChart.data.datasets[1].data.push(data.ram); if (sysChart.data.labels.length > 20) { sysChart.data.labels.shift(); sysChart.data.datasets[0].data.shift(); sysChart.data.datasets[1].data.shift(); } sysChart.update(); }).catch(e => {}); }, 1500);
+
+        const toggleWidget = (b, w) => { document.getElementById(b).onclick = () => document.getElementById(w).style.display = 'flex'; document.getElementById('close-'+w.split('-')[0]+'-btn').onclick = () => document.getElementById(w).style.display = 'none'; };
+        toggleWidget('toggle-chat', 'chat-container'); toggleWidget('toggle-config', 'config-container'); toggleWidget('toggle-storage', 'storage-container');
+        function addMessage(text, sender) { const div = document.createElement('div'); div.className = `message message-${sender}`; div.innerHTML = text.replace(/\n/g, '<br>'); document.getElementById('chat-messages').appendChild(div); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight; }
+        document.getElementById('send-chat').onclick = () => { const msg = document.getElementById('chat-input').value.trim(); if(!msg) return; addMessage(msg, 'user'); document.getElementById('chat-input').value = ""; addMessage("Đang xử lý...", 'ai', 'ai-thinking'); document.getElementById('chat-input').disabled = true; document.getElementById('send-chat').disabled = true; ws.send(JSON.stringify({type: "chat", message: msg})); };
+        document.getElementById('btn-sync').onclick = () => { ws.send(JSON.stringify({ type: "update_config", ai_model: document.getElementById('sel-model').value })); document.getElementById('config-container').style.display = 'none'; addMessage("Đang cập nhật cấu hình...", 'ai', 'ai-thinking'); };
+    </script>
+</body>
+</html>
 
