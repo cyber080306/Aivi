@@ -1,0 +1,116 @@
+import os
+import io
+import time
+from flask import Flask, request, Response, jsonify
+from flask_cors import CORS
+import google.generativeai as genai
+from gtts import gTTS
+
+app = Flask(__name__)
+# Mở CORS để nếu có làm Dashboard theo dõi qua web thì không bị chặn
+CORS(app) 
+
+# Cấu hình API Key (Thường trong dự án thật sẽ giấu vào file .env)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
+
+# Khởi tạo model xử lý ảnh
+vision_model = genai.GenerativeModel('gemini-1.5-flash')
+
+def get_ai_description(image_bytes):
+    """Đóng gói ảnh gửi lên API AI và nhận về text"""
+    try:
+        image_parts = [{"mime_type": "image/jpeg", "data": image_bytes}]
+        
+        # Prompt được tinh chỉnh cho người khiếm thị
+        prompt = (
+            "Bạn là trợ lý cho người khiếm thị. Dựa vào ảnh, hãy mô tả nhanh, "
+            "ngắn gọn các vật cản nguy hiểm hoặc bối cảnh phía trước trong 1-2 câu tiếng Việt."
+        )
+        
+        response = vision_model.generate_content([prompt, image_parts[0]])
+        return response.text.strip()
+    except Exception as e:
+        print(f"[LỖI AI] Không thể phân tích: {e}")
+        return "Xin lỗi, không thể nhận diện hình ảnh lúc này."
+
+def generate_audio_stream(text):
+    """
+    Chuyển Text thành Audio và băm (chunk) dữ liệu.
+    Luồng này sẽ yield từng gói byte về thẳng ESP32.
+    """
+    try:
+        # Tạo file âm thanh trong RAM (BytesIO) thay vì lưu xuống ổ cứng
+        tts = gTTS(text=text, lang='vi')
+        audio_fp = io.BytesIO()
+        tts.write_to_fp(audio_fp)
+        audio_fp.seek(0)
+        
+        # Chunk size: Thường là 1024 hoặc 2048 bytes (Tối ưu cho RAM ESP32)
+        chunk_size = 1024 
+        while True:
+            chunk = audio_fp.read(chunk_size)
+            if not chunk:
+                break
+            
+            yield chunk
+            
+            # (Tuỳ chọn) Delay vi giây để tránh gửi quá nhanh làm tràn buffer của mạch vi điều khiển
+            # time.sleep(0.005) 
+            
+    except Exception as e:
+        print(f"[LỖI AUDIO] Không thể tạo âm thanh: {e}")
+
+
+@app.route('/api/analyze-stream', methods=['POST'])
+def analyze_and_stream():
+    """
+    Endpoint chính xử lý toàn bộ Pipeline: 
+    Image -> AI -> Text -> Audio -> ESP32
+    """
+    try:
+        # 1. Trích xuất dữ liệu ảnh từ request của ESP32-CAM
+        image_bytes = None
+        
+        # Trường hợp 1: ESP32 gửi dạng form-data
+        if request.content_type and request.content_type.startswith('multipart/form-data'):
+            if 'image' not in request.files:
+                return jsonify({"error": "Thiếu file ảnh trong form-data"}), 400
+            image_bytes = request.files['image'].read()
+            
+        # Trường hợp 2: ESP32 gửi thẳng raw byte (thường dùng nhất để tối ưu tốc độ)
+        else:
+            image_bytes = request.data
+
+        if not image_bytes:
+            return jsonify({"error": "Dữ liệu ảnh trống"}), 400
+
+        print(f"[INFO] Bắt đầu xử lý frame. Kích thước: {len(image_bytes)} bytes")
+
+        # 2. Xử lý ảnh qua AI lấy mô tả text
+        ai_text = get_ai_description(image_bytes)
+        print(f"[INFO] AI Response: {ai_text}")
+
+        # 3. Trả về luồng Audio Stream (Chunked)
+        # Các header dưới đây rất quan trọng để ESP32 hiểu là đang nhận Stream
+        return Response(
+            generate_audio_stream(ai_text), 
+            mimetype='audio/mpeg',
+            headers={
+                'Transfer-Encoding': 'chunked',
+                'Connection': 'keep-alive',
+                'Cache-Control': 'no-cache'
+            }
+        )
+
+    except Exception as e:
+        print(f"[LỖI SERVER] {e}")
+        return jsonify({"error": "Internal Server Error"}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "AIVI Backend is running", "version": "1.0"}), 200
+
+if __name__ == '__main__':
+    # threaded=True để server không bị nghẽn khi đang stream dở một audio
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
